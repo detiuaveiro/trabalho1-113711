@@ -10,11 +10,11 @@
 /// 2013, 2023
 
 // Student authors (fill in below):
-// NMec:  Name:
+// NMec: 113711 Name: Mariana Freitas Ribeiro 
 // 
 // 
 // 
-// Date:
+// Date: 22/11/2023
 //
 
 #include "image8bit.h"
@@ -171,7 +171,16 @@ Image ImageCreate(int width, int height, uint8 maxval) { ///
   assert (width >= 0);
   assert (height >= 0);
   assert (0 < maxval && maxval <= PixMax);
-  // Insert your code here!
+  Image img = (Image)malloc(sizeof(Image)); //initialize the pointer.
+  img->width = width; 
+  img->height = height;
+  img->maxval = maxval;
+  img->pixel = (uint8*)calloc(width*height, sizeof(uint8)); //using calloc instead of malloc for every value in the memory that is allocated to be set to 0, creating the black image of the size height*width
+  if (img == NULL || img->pixel ==  NULL){ 
+    errCause = "Not enough memory - memory allocation failed";
+    return NULL;
+  }
+  return img; //return img which is a pointer to acceptable values containing the width, height and maxval of this image
 }
 
 /// Destroy the image pointed to by (*imgp).
@@ -179,9 +188,13 @@ Image ImageCreate(int width, int height, uint8 maxval) { ///
 /// If (*imgp)==NULL, no operation is performed.
 /// Ensures: (*imgp)==NULL.
 /// Should never fail, and should preserve global errno/errCause.
-void ImageDestroy(Image* imgp) { ///
+void ImageDestroy(Image *imgp) { ///
   assert (imgp != NULL);
-  // Insert your code here!
+  Image img = *imgp; //dereference the pointer;
+  free(img->pixel); //free the memory in the 1D array;
+  *img->pixel = NULL; //delete the pointer;
+  free(img); //free the rest of the memory;
+  *imgp = NULL; //delete the pointer;
 }
 
 
@@ -293,7 +306,10 @@ int ImageMaxval(Image img) { ///
 /// *max is set to the maximum.
 void ImageStats(Image img, uint8* min, uint8* max) { ///
   assert (img != NULL);
-  // Insert your code here!
+  for ( int i = 0; i < img->height*img->width ; i++){
+    if ( *min > img->pixel[i]){*min = img->pixel[i];}
+    if ( *max < img->pixel[i]){*max = img->pixel[i];}
+  }
 }
 
 /// Check if pixel position (x,y) is inside img.
