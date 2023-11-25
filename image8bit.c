@@ -171,7 +171,7 @@ Image ImageCreate(int width, int height, uint8 maxval) { ///
   assert (width >= 0);
   assert (height >= 0);
   assert (0 < maxval && maxval <= PixMax);
-  Image img = (Image)malloc(sizeof(Image)); //initialize the pointer.
+  Image img = (Image)malloc(sizeof(struct image)); //initialize the pointer.
   img->width = width; 
   img->height = height;
   img->maxval = maxval;
@@ -190,11 +190,10 @@ Image ImageCreate(int width, int height, uint8 maxval) { ///
 /// Should never fail, and should preserve global errno/errCause.
 void ImageDestroy(Image *imgp) { ///
   assert (imgp != NULL);
-  Image img = *imgp; //dereference the pointer;
-  free(img->pixel); //free the memory in the 1D array;
-  *img->pixel = NULL; //delete the pointer;
-  free(img); //free the rest of the memory;
-  *imgp = NULL; //delete the pointer;
+  Image img = *imgp;   //dereference the pointer;
+  free(img->pixel);    //free the memory in the 1D array;
+  free(img);           //free the rest of the memory;
+  *imgp = NULL;        //delete the pointer;
 }
 
 
@@ -321,7 +320,7 @@ int ImageValidPos(Image img, int x, int y) { ///
 /// Check if rectangular area (x,y,w,h) is completely inside img.
 int ImageValidRect(Image img, int x, int y, int w, int h) { ///
   assert (img != NULL);
-  assert (w > 0 && h > 0); 
+  if (w <= 0 || h <= 0) {return 0;}
   
   // making sure width and height values are not negative (which if they were to be, the image cropped could potentially give an inverted 
    // cropped image) and also check if the position (x,y) is inside img.
@@ -496,10 +495,10 @@ Image ImageCrop(Image img, int x, int y, int w, int h) { ///
   Image new_img = ImageCreate(w, h, ImageMaxval(img));
   for (int i = 0; i < w; i++){
     for (int j = 0; j < h; j++){
-      int width = x+i;
-      int height = y+j;
-      uint8 level = ImageGetPixel(img, width, height);
-      ImageSetPixel(new_img, i, j, level);
+      int width = x+i;         
+      int height = y+j;                               //starting at coords x,y
+      uint8 level = ImageGetPixel(img, width, height);//get the pixels of the main image
+      ImageSetPixel(new_img, i, j, level);            //and paste them in the new image
     }
   }
   if (new_img == NULL){
@@ -519,12 +518,13 @@ Image ImageCrop(Image img, int x, int y, int w, int h) { ///
 void ImagePaste(Image img1, int x, int y, Image img2) { ///
   assert (img1 != NULL);
   assert (img2 != NULL);
-  assert (ImageValidRect(img1, x, y, ImageWidth(img2), ImageHeight(img2)));
+  assert (ImageValidRect(img1, x, y, ImageWidth(img2), ImageHeight(img2))); //validate the space of img2 inside of img1, if there's not enough space, this will abort
   for (int i = 0; i < ImageWidth(img2); i++){
     for (int j = 0; j < ImageHeight(img2); j++){
-      int width = i+x;
-      int height = j+y;
-      ImageSetPixel(img1, width, height, ImageGetPixel(img2, i, j));
+      int width = i+x;              
+      int height = j+y;       //starting at coords x,y
+      ImageSetPixel(img1, width, height, ImageGetPixel(img2, i, j)); //get the img2 (small image) pixel starting from (0,0) and paste them into (the bigger image) img1
+      //starting at coords x,y.  
     }
   }
 }
@@ -556,14 +556,14 @@ void ImageBlend(Image img1, int x, int y, Image img2, double alpha) { ///
 /// Compare an image to a subimage of a larger image.
 /// Returns 1 (true) if img2 matches subimage of img1 at pos (x, y).
 /// Returns 0, otherwise.
-int ImageMatchSubImage(Image img1, int x, int y, Image img2) { ///img2 é a imagem pequena que se compara na imagem maior img1
+int ImageMatchSubImage(Image img1, int x, int y, Image img2) { //look for img2 inside img1 (img1 is bigger than img2)
   assert (img1 != NULL);
   assert (img2 != NULL);
-  assert (ImageValidPos(img1, x, y));
-  for (int i = 0; i < ImageWidth(img2); i++){
-    for (int j = 0; j < ImageHeight(img2); j++){
-      int width = i+x;
-      int height = j+y;
+  assert (ImageValidPos(img1, x, y));             
+  for (int i = 0; i < ImageWidth(img2); i++){     
+    for (int j = 0; j < ImageHeight(img2); j++){  //given a certain x,y and img1, we're gonna compare img2 (the smaller image) with the sub-image of img1 starting
+      int width = i+x;                            //at position x,y. the first pixel with unmatching values, makes the function return false for a similar sub-image
+      int height = j+y;                           //while we start looking at pixels in img2 at (0,0), img1 starts at (x,y), then (x+1,j)... until (x+img2->width-1,y+img2->height-1)
       if (ImageGetPixel(img2, i, j) != ImageGetPixel(img1, width, height)){
         return 0;
       }
@@ -581,16 +581,16 @@ int ImageLocateSubImage(Image img1, int* px, int* py, Image img2) { ///
   assert (img2 != NULL);
   for (int i = 0; i < ImageWidth(img1)-ImageWidth(img2); i++){
     for (int j = 0; j < ImageHeight(img1)-ImageHeight(img2); j++){
-      if (ImageGetPixel(img1, i, j) == ImageGetPixel(img2, 0, 0)){
-        if (ImageMatchSubImage(img1, i, j, img2)){
-          *px = i;
-          *py = j; 
-          return 1;
+      if (ImageGetPixel(img1, i, j) == ImageGetPixel(img2, 0, 0)){ //look for the value of the first pixel in img2 in img1. the first time this is true
+        if (ImageMatchSubImage(img1, i, j, img2)){ //run the function to check if the image starting at position i,j matches. if true
+          *px = i;  //change the pointer x coord value to i
+          *py = j;  //y coord value to j
+          return 1; //and finally return true
         }
       }
     }
   }
-  return 0;
+  return 0; //if the whole function runs and img2 isn't found in img1, return false
 }
 
 
@@ -601,6 +601,30 @@ int ImageLocateSubImage(Image img1, int* px, int* py, Image img2) { ///
 /// [x-dx, x+dx]x[y-dy, y+dy].
 /// The image is changed in-place.
 void ImageBlur(Image img, int dx, int dy) { ///
-  // Insert your code here!
+  assert (img != NULL);
+  Image new_image = ImageCreate(ImageWidth(img), ImageHeight(img), ImageMaxval(img)); //we have to create a new temporary image to give the mean values, otherwise it
+  if (new_image == NULL){errCause = "Not enough memory";} //won't be possible to correctly calculate them while we change them.
+  for (int y = 0; y < ImageHeight(img); y++){
+    for (int x = 0; x < ImageWidth(img); x++){
+      int pixel_mean_sum = 0;                //this is where the rectangle would start. it will get negative coords until x = dx & y = dy,  
+      int pixel_element_count = 0;           //so that we give the mean value always to the pixel centered in the middle.
+      for (int i = 0; i < 2*dx; i++){        //again, even tho these cords will be negative sometimes, we just need to ignore those invalid coords.
+        for (int j = 0; j < 2*dy; j++){      
+          if (!(ImageValidPos(img, x+i, y+j))){continue;} //if the pixel isn't valid, just skip it. those pixels on the border of the image will have the mean
+          //of less element count than those in the center on purpose
+          pixel_mean_sum+=ImageGetPixel(img, x+i, y+j);   //sum all the pixel values inside the filter area
+          pixel_element_count+=1; //sum the number of pixels inside the filter area
+        }
+      }
+      uint8 blur_pixel = (uint8)(double)(((pixel_mean_sum) / pixel_element_count)+0.5); //do the math, 0.5 for round-sake but it doesn't change anything
+      ImageSetPixel(new_image, x, y, blur_pixel); //give the blurred effect to the pixel in the temporary image
+    }
+  }
+  for (int y=0; y<ImageHeight(img); y++){
+    for (int x=0; x<ImageWidth(img); x++){
+      ImageSetPixel(img, x , y, ImageGetPixel(new_image, x, y)); //FINALLY, give the values from the temporary image to img
+    }
+  }
+  ImageDestroy(&new_image); //and delete this temporary image
 }
 
