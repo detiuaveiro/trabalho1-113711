@@ -306,7 +306,7 @@ int ImageMaxval(Image img) { ///
 /// *max is set to the maximum.
 void ImageStats(Image img, uint8* min, uint8* max) { ///
   assert (img != NULL);
-  for ( int i = 0; i < img->height*img->width ; i++){
+  for ( int i = 0; i < ImageHeight(img)*ImageWidth(img) ; i++){
     if ( *min > img->pixel[i]){*min = img->pixel[i];}
     if ( *max < img->pixel[i]){*max = img->pixel[i];}
   }
@@ -315,13 +315,17 @@ void ImageStats(Image img, uint8* min, uint8* max) { ///
 /// Check if pixel position (x,y) is inside img.
 int ImageValidPos(Image img, int x, int y) { ///
   assert (img != NULL);
-  return (0 <= x && x < img->width) && (0 <= y && y < img->height);
+  return (0 <= x && x < ImageWidth(img)) && (0 <= y && y < ImageHeight(img));
 }
 
 /// Check if rectangular area (x,y,w,h) is completely inside img.
 int ImageValidRect(Image img, int x, int y, int w, int h) { ///
   assert (img != NULL);
-  // Insert your code here!
+  assert (w > 0 && h > 0); 
+  
+  // making sure width and height values are not negative (which if they were to be, the image cropped could potentially give an inverted 
+   // cropped image) and also check if the position (x,y) is inside img.
+  return ( (ImageValidPos(img, x, y)) && ((x+w)<=ImageWidth(img)) && ((y+h)<=ImageHeight(img)) ); // returns 1 if the rectangle sides, starting from the point (x,y), are inside the image area.
 }
 
 /// Pixel get & set operations
@@ -335,9 +339,9 @@ int ImageValidRect(Image img, int x, int y, int w, int h) { ///
 // This internal function is used in ImageGetPixel / ImageSetPixel. 
 // The returned index must satisfy (0 <= index < img->width*img->height)
 static inline int G(Image img, int x, int y) {
-  int index;
-  // Insert your code here!
-  assert (0 <= index && index < img->width*img->height);
+  assert( (x >= 0) && (y >= 0) );
+  int index = x + y*ImageWidth(img); //for every y, we add another line = width elements  
+  assert (0 <= index && index < ImageWidth(img)*ImageHeight(img));
   return index;
 }
 
@@ -371,7 +375,11 @@ void ImageSetPixel(Image img, int x, int y, uint8 level) { ///
 /// resulting in a "photographic negative" effect.
 void ImageNegative(Image img) { ///
   assert (img != NULL);
-  // Insert your code here!
+  for (int x = 0; x < ImageWidth(img); x++){ //for every coordinate for x ∈ [0,width]
+    for (int y = 0; y < ImageHeight(img); y++){ // & y ∈ [0,height],
+      ImageSetPixel(img, x, y, abs(ImageMaxval(img)-ImageGetPixel(img, x, y))); // the pixel value ∈ [0,255] will be it's inverse, therefore 255 - absolute (value)
+    }
+  }
 }
 
 /// Apply threshold to image.
@@ -379,7 +387,12 @@ void ImageNegative(Image img) { ///
 /// all pixels with level>=thr to white (maxval).
 void ImageThreshold(Image img, uint8 thr) { ///
   assert (img != NULL);
-  // Insert your code here!
+  for (int x = 0; x < ImageWidth(img); x++){ //for every coordinate for x ∈ [0,width]
+    for (int y = 0; y < ImageHeight(img); y++){ // & y ∈ [0,height],
+      ImageSetPixel(img, x, y, ( (ImageGetPixel(img, x, y)>=thr) * ImageMaxval(img)) );// ImageGetPixel returns the level of each pixel. If said level is bigger or equals
+      //to thr, it returns 1, if lower, returns 0. Then I multiply that result by the maxval: if true then it becomes 255 (maxvalue), if false it stays 0 (0*255 = 0).
+    }
+  }
 }
 
 /// Brighten image by a factor.
@@ -388,10 +401,17 @@ void ImageThreshold(Image img, uint8 thr) { ///
 /// darken the image if factor<1.0.
 void ImageBrighten(Image img, double factor) { ///
   assert (img != NULL);
-  // ? assert (factor >= 0.0);
-  // Insert your code here!
+  assert( factor > 0 );
+  for (int x = 0; x < ImageWidth(img); x++){ //for every coordinate for x ∈ [0,width]
+    for (int y = 0; y < ImageHeight(img); y++){ // & y ∈ [0,height],
+      uint8 new_brightness = (ImageGetPixel(img, x , y)*factor)+0.5; // the new brightness will be = to the value of the pixel * factor rounded up,
+      if (new_brightness > 255){ //if the new brightness > 255, 
+        new_brightness = ImageMaxval(img);// then it becomes = 255
+        }
+      ImageSetPixel(img, x , y, new_brightness); // and finally set the new brightness to the pixel
+    }
+  }
 }
-
 
 /// Geometric transformations
 
@@ -416,7 +436,23 @@ void ImageBrighten(Image img, double factor) { ///
 /// On failure, returns NULL and errno/errCause are set accordingly.
 Image ImageRotate(Image img) { ///
   assert (img != NULL);
-  // Insert your code here!
+  Image new_img = ImageCreate(ImageHeight(img), ImageWidth(img), ImageMaxval(img)); //create an image with the height = old width and width = old height size
+  for (int x = 0; x < ImageWidth(img); x++){ //for every coordinate for x ∈ [0,width]
+    for (int y = 0; y < ImageHeight(img); y++){ // & y ∈ [0,height],
+      int width = ImageHeight(img)-y-1;
+      int height = x;
+      ImageSetPixel(new_img, x, y, ImageGetPixel(img, width, height));// The first line of pixels (with y = 0) will become the 
+      // last column of pixels (with x = img->height) taking values ∈ [0,height], then the second line of pixels (y = 1) will 
+      // become the second last column of pixels (x = old image height -1 ), etc... until the last line of pixels (with y = width) becomes
+      // the first column of pixels (x = 0). We can also look at this from a mathematical prespective
+      // and apply a change of variables of: ( x =-y ) & ( y = x )  
+    }
+  }
+  if (new_img == NULL){
+    errCause = "Not enough memory";
+    return NULL;
+  }
+  return new_img;
 }
 
 /// Mirror an image = flip left-right.
@@ -428,7 +464,18 @@ Image ImageRotate(Image img) { ///
 /// On failure, returns NULL and errno/errCause are set accordingly.
 Image ImageMirror(Image img) { ///
   assert (img != NULL);
-  // Insert your code here!
+  Image new_img =  ImageCreate(ImageWidth(img), ImageHeight(img), ImageMaxval(img)); //create an image with exactly the same size and maxvalues
+  for (int x = 0; x < ImageWidth(img); x++){ // for every coordinate for x ∈ [0,width]
+    for (int y = 0; y < ImageHeight(img); y++){ // & y ∈ [0,height],
+        int width = ImageWidth(img)-x-1; //the new width will start from the other end of the image, therefore, width-1 (for the first iteration)
+        ImageSetPixel(new_img, x ,y,ImageGetPixel(img, width, y)); //set pixel for the value in the other end. 
+    }
+  }
+  if (new_img == NULL){
+    errCause = "Not enough memory";
+    return NULL;
+  }
+  return new_img;
 }
 
 /// Crop a rectangular subimage from img.
@@ -446,7 +493,20 @@ Image ImageMirror(Image img) { ///
 Image ImageCrop(Image img, int x, int y, int w, int h) { ///
   assert (img != NULL);
   assert (ImageValidRect(img, x, y, w, h));
-  // Insert your code here!
+  Image new_img = ImageCreate(w, h, ImageMaxval(img));
+  for (int i = 0; i < w; i++){
+    for (int j = 0; j < h; j++){
+      int width = x+i;
+      int height = y+j;
+      uint8 level = ImageGetPixel(img, width, height);
+      ImageSetPixel(new_img, i, j, level);
+    }
+  }
+  if (new_img == NULL){
+    errCause = "Not enough memory";
+    return NULL;
+  }
+  return new_img;
 }
 
 
@@ -459,8 +519,14 @@ Image ImageCrop(Image img, int x, int y, int w, int h) { ///
 void ImagePaste(Image img1, int x, int y, Image img2) { ///
   assert (img1 != NULL);
   assert (img2 != NULL);
-  assert (ImageValidRect(img1, x, y, img2->width, img2->height));
-  // Insert your code here!
+  assert (ImageValidRect(img1, x, y, ImageWidth(img2), ImageHeight(img2)));
+  for (int i = 0; i < ImageWidth(img2); i++){
+    for (int j = 0; j < ImageHeight(img2); j++){
+      int width = i+x;
+      int height = j+y;
+      ImageSetPixel(img1, width, height, ImageGetPixel(img2, i, j));
+    }
+  }
 }
 
 /// Blend an image into a larger image.
@@ -473,17 +539,37 @@ void ImageBlend(Image img1, int x, int y, Image img2, double alpha) { ///
   assert (img1 != NULL);
   assert (img2 != NULL);
   assert (ImageValidRect(img1, x, y, img2->width, img2->height));
-  // Insert your code here!
+  for (int i = 0; i < ImageWidth(img2); i++){
+    for (int j = 0; j < ImageHeight(img2); j++){
+      int width = i+x; // the new value for the pixel will be a mix of image 1 and image 2, and the portions will be decided by the alpha value which represents the percentage of img2 pixel to be added into img1 pixel
+      int height = j+y; // it will have alpha*img2'pixel (which is the smaller image) and (the rest of the percentage of alpha)*img1'pixel. since c will
+      int new_value = ImageGetPixel(img2, i, j)*alpha + ImageGetPixel(img1, width, height)*(1-alpha) + 0.5; // floor when changing to back to int, we add 0.5,
+      if (new_value < 0) { // this way if the result decimal case is >= 0.5, it will get rounded up by 1.
+        new_value = 0;}
+      else if (new_value > ImageMaxval(img1) ){
+        new_value = ImageMaxval(img1);}
+      ImageSetPixel(img1, width, height, new_value); //finally set pixel to the new value;
+    }
+  }
 }
 
 /// Compare an image to a subimage of a larger image.
 /// Returns 1 (true) if img2 matches subimage of img1 at pos (x, y).
 /// Returns 0, otherwise.
-int ImageMatchSubImage(Image img1, int x, int y, Image img2) { ///
+int ImageMatchSubImage(Image img1, int x, int y, Image img2) { ///img2 é a imagem pequena que se compara na imagem maior img1
   assert (img1 != NULL);
   assert (img2 != NULL);
   assert (ImageValidPos(img1, x, y));
-  // Insert your code here!
+  for (int i = 0; i < ImageWidth(img2); i++){
+    for (int j = 0; j < ImageHeight(img2); j++){
+      int width = i+x;
+      int height = j+y;
+      if (ImageGetPixel(img2, i, j) != ImageGetPixel(img1, width, height)){
+        return 0;
+      }
+    }
+  }
+  return 1;
 }
 
 /// Locate a subimage inside another image.
@@ -493,7 +579,18 @@ int ImageMatchSubImage(Image img1, int x, int y, Image img2) { ///
 int ImageLocateSubImage(Image img1, int* px, int* py, Image img2) { ///
   assert (img1 != NULL);
   assert (img2 != NULL);
-  // Insert your code here!
+  for (int i = 0; i < ImageWidth(img1)-ImageWidth(img2); i++){
+    for (int j = 0; j < ImageHeight(img1)-ImageHeight(img2); j++){
+      if (ImageGetPixel(img1, i, j) == ImageGetPixel(img2, 0, 0)){
+        if (ImageMatchSubImage(img1, i, j, img2)){
+          *px = i;
+          *py = j; 
+          return 1;
+        }
+      }
+    }
+  }
+  return 0;
 }
 
 
