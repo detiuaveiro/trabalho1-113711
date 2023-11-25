@@ -608,15 +608,16 @@ void ImageBlur(Image img, int dx, int dy) { ///
     for (int x = 0; x < ImageWidth(img); x++){
       int pixel_mean_sum = 0;                //this is where the rectangle would start. it will get negative coords until x = dx & y = dy,  
       int pixel_element_count = 0;           //so that we give the mean value always to the pixel centered in the middle.
-      for (int i = 0; i < 2*dx; i++){        //again, even tho these cords will be negative sometimes, we just need to ignore those invalid coords.
-        for (int j = 0; j < 2*dy; j++){      
-          if (!(ImageValidPos(img, x+i, y+j))){continue;} //if the pixel isn't valid, just skip it. those pixels on the border of the image will have the mean
+      for (int i = -dy; i <= dy; i++){        //again, even tho these cords will be negative sometimes, we just need to ignore those invalid coords.
+        for (int j = -dx; j <= dx; j++){      
+          if (!(ImageValidPos(img, j+x, i+y))){continue;} //if the pixel isn't valid, just skip it. those pixels on the border of the image will have the mean
           //of less element count than those in the center on purpose
-          pixel_mean_sum+=ImageGetPixel(img, x+i, y+j);   //sum all the pixel values inside the filter area
+          pixel_mean_sum+=ImageGetPixel(img, j+x, i+y);   //sum all the pixel values inside the filter area
           pixel_element_count+=1; //sum the number of pixels inside the filter area
         }
       }
-      uint8 blur_pixel = (uint8)(double)(((pixel_mean_sum) / pixel_element_count)+0.5); //do the math, 0.5 for round-sake but it doesn't change anything
+      double blur_pixel = ((double)(pixel_mean_sum) / pixel_element_count)+0.5; //do the math
+      blur_pixel = (int)blur_pixel;
       ImageSetPixel(new_image, x, y, blur_pixel); //give the blurred effect to the pixel in the temporary image
     }
   }
